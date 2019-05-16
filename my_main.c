@@ -54,6 +54,8 @@ void my_main() {
   int i;
   struct matrix *tmp;
   struct stack *systems;
+  struct matrix *polygons;
+  struct matrix *edges;
   screen t;
   zbuffer zb;
   color g;
@@ -100,6 +102,8 @@ void my_main() {
 
   systems = new_stack();
   tmp = new_matrix(4, 1000);
+  polygons = new_matrix(4,4);
+  edges = new_matrix(4,4);
   clear_screen( t );
   clear_zbuffer(zb);
   g.red = 0;
@@ -108,9 +112,86 @@ void my_main() {
 
   print_symtab();
   for (i=0;i<lastop;i++) {
-
     printf("%d: ",i);
-
+    switch(op[i].opcode){
+      case PUSH:
+        push(systems);
+        break;
+      case POP:
+        pop(systems);
+        break;
+      case MOVE:
+	      tmp = make_translate(
+      	  op[i].op.move.d[0],
+      	  op[i].op.move.d[1],
+      	  op[i].op.move.d[2]);
+      	matrix_mult(peek(systems), tmp);
+      	copy_matrix(tmp, peek(systems));
+      	break;
+      case ROTATE:
+        theta = op[i].op.rotate.degrees * M_PI / 180;
+      	if ( op[i].op.rotate.axis == 0.0 )
+      	  tmp = make_rotX( theta);
+      	else if ( op[i].op.rotate.axis == 1.0)
+      	  tmp = make_rotY( theta );
+      	else
+      	  tmp = make_rotZ( theta );
+      	matrix_mult(peek(systems), tmp);
+      	copy_matrix(tmp, peek(systems));
+      	break;
+      case SCALE:
+        tmp = make_scale(op[i].op.scale.d[0],
+                         op[i].op.scale.d[1],
+                         op[i].op.scale.d[2]);
+        matrix_mult(peek(systems), tmp);
+        copy_matrix(tmp, peek(systems));
+        break;
+      case BOX:
+        add_box(polygons, op[i].op.box.d0[0],op[i].op.box.d0[1],op[i].op.box.d0[2],
+                          op[i].op.box.d1[0],op[i].op.box.d1[1],op[i].op.box.d1[2]);
+        matrix_mult(peek(systems), polygons);
+        reflect = &white;
+        if (op[i].op.box.constants != NULL)
+          reflect = op[i].op.box.constants->s.c;
+        draw_polygons(polygons, t, zb, view, light, ambient, reflect);
+        polygons->lastcol = 0;
+        break;
+      case SPHERE:
+        add_sphere(polygons, op[i].op.sphere.d[0],op[i].op.sphere.d[1],op[i].op.sphere.d[2],
+                              op[i].op.sphere.r, step_3d);
+        matrix_mult(peek(systems), polygons);
+        reflect = &white;
+        if (op[i].op.sphere.constants != NULL)
+          reflect = op[i].op.sphere.constants->s.c;
+        draw_polygons(polygons, t, zb, view, light, ambient, reflect);
+        polygons->lastcol = 0;
+        break;
+      case TORUS:
+        add_torus(polygons, op[i].op.torus.d[0],op[i].op.torus.d[1],op[i].op.torus.d[2],
+                            op[i].op.torus.r0,op[i].op.torus.r1, step_3d);
+        matrix_mult(peek(systems), polygons);
+        reflect = &white;
+        if (op[i].op.torus.constants != NULL)
+          reflect = op[i].op.torus.constants->s.c;
+        draw_polygons(polygons, t, zb, view, light, ambient, reflect);
+        polygons->lastcol = 0;
+        break;
+      case CONSTANTS:
+        break;
+      case LINE:
+        add_edge(edges, op[i].op.line.p0[0],op[i].op.line.p0[1],op[i].op.line.p0[1],
+                        op[i].op.line.p1[0],op[i].op.line.p1[1],op[i].op.line.p1[1]);
+        matrix_mult(peek(systems), edges);
+        draw_lines(edges, t, zb, g);
+        edges->lastcol = 0;
+      	break;
+      case SAVE:
+      	save_extension(t, op[i].op.save_coordinate_system.p->name);
+      	break;
+      case DISPLAY:
+      	display(t);
+      	break;
+      }
     printf("\n");
   }
 }
